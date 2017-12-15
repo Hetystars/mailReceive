@@ -8,13 +8,23 @@
 
 class receiveMail
 {
+    /**
+     * @var string
+     */
     private
         $server = '',
         $username = '',
         $password = '',
-        $mailbox,
         $email = '';
 
+    /**
+     * @var resource
+     */
+    private $mailbox;
+
+    /**
+     * @var int
+     */
     public
         $totalValid = 0;
 
@@ -99,7 +109,9 @@ class receiveMail
                 'subject' => $subject,
                 'mailDate' => date("Y-m-d H:i:s", $mail_header->udate),
                 'udate' => $mail_header->udate,
-                'toList' => $toList
+                'toList' => $toList,
+                'seen'=>$mail_header->Unseen,
+                'recent'=>$mail_header->Recent
             );
         }
         return $mail_details;
@@ -124,8 +136,8 @@ class receiveMail
      * @param $stream
      * @param $msg_number
      * @param $mime_type
-     * @param bool $structure
-     * @param bool $part_number
+     * @param bool|object $structure
+     * @param bool|string $part_number
      * @return bool|string
      */
     public function get_part($stream, $msg_number, $mime_type, $structure = false, $part_number = false)
@@ -168,9 +180,7 @@ class receiveMail
         if (!$this->mailbox) {
             return false;
         }
-// 		return imap_headers($this->mailbox);
-        $resultObj = imap_mailboxmsginfo($this->mailbox);
-        return $resultObj->Unread;
+        return imap_mailboxmsginfo($this->mailbox)->Unread;
         return imap_num_recent($this->mailbox);
     }
 
@@ -185,44 +195,39 @@ class receiveMail
         if (!$this->mailbox)
             return false;
 
-        $struckture = imap_fetchstructure($this->mailbox, $mid);
+        $structure = imap_fetchstructure($this->mailbox, $mid);
 
         $files = array();
-        if ($struckture->parts) {
-            foreach ($struckture->parts as $key => $value) {
-                $enc = $struckture->parts[$key]->encoding;
+        if ($structure->parts) {
+            foreach ($structure->parts as $key => $value) {
+                $enc = $structure->parts[$key]->encoding;
                 //取邮件附件
-                if ($struckture->parts[$key]->ifdparameters) {
+                if ($structure->parts[$key]->ifdparameters) {
                     $this->totalValid++;
                     //命名附件,转码
-                    $name = $this->decode_mime($struckture->parts[$key]->dparameters[0]->value);
+                    $name = $this->decode_mime($structure->parts[$key]->dparameters[0]->value);
                     $extend = explode('.', $name);
                     $file['extension'] = $extend[count($extend) - 1];
                     $file['pathname'] = $this->setPathName($key, $file['extension']);
                     $file['title'] = !empty($name) ? htmlspecialchars($name) : str_replace('.' . $file['extension'], '', $name);
-                    $file['size'] = $struckture->parts[$key]->bytes;
-                    $file['tmpname'] = $struckture->parts[$key]->dparameters[0]->value;
-                    if ($struckture->parts[$key]->disposition === 'ATTACHMENT') {
+                    $file['size'] = $structure->parts[$key]->bytes;
+                    $file['tmpname'] = $structure->parts[$key]->dparameters[0]->value;
+                    if ($structure->parts[$key]->disposition === 'ATTACHMENT') {
                         $file['type'] = 1;
                     } else {
                         $file['type'] = 0;
                     }
 
                     $message = imap_fetchbody($this->mailbox, $mid, $key + 1);
-                    if ($enc == 0)
-                        $message = imap_8bit($message);
-                    if ($enc == 1)
-                        $message = imap_8bit($message);
-                    if ($enc == 2)
-                        $message = imap_binary($message);
-                    if ($enc == 3)//图片
-                        $message = imap_base64($message);
-                    if ($enc == 4)
-                        $message = quoted_printable_decode($message);
+                    0 == $enc && $message = imap_8bit($message);
+                    1 == $enc && $message = imap_8bit($message);
+                    2 == $enc && $message = imap_binary($message);
+                    3 == $enc && $message = imap_base64($message);
+                    4 == $enc && $message = quoted_printable_decode($message);
 
                     $files[] = $file;
                     $filePath = $path . '\\' . $file['tmpname'];
-                    $fp = fopen($filePath, "w+");
+                    $fp = fopen($filePath, 'wb+');
                     !$fp && exit($filePath . '文件打开失败');
                     fwrite($fp, $message);
                     fclose($fp);
@@ -230,7 +235,6 @@ class receiveMail
                 }
             }
         }
-
         return $files;
     }
 
@@ -239,7 +243,7 @@ class receiveMail
      * @param $mid
      * @param $path
      * @param $imageList
-     * @return bool|mixed|string|void
+     * @return bool|mixed|string
      */
     public function getBody($mid, &$path)
     {
@@ -261,15 +265,13 @@ class receiveMail
      * @param $body
      * @param $path
      * @param $imageList
-     * @return mixed|void
+     * @return mixed
      */
     public function embed_images(&$body, &$path)
     {
-        // get all img tags
         preg_match_all('/<img.*?>/', $body['text'], $matches);
         if (!isset($matches[0])) return '';
         foreach ($matches[0] as $img) {
-            // replace image web path with local path
             preg_match('/src="(.*?)"/', $img, $m);
             if (!isset($m[1])) continue;
             $arr = parse_url($m[1]);
@@ -277,7 +279,7 @@ class receiveMail
 
             if ("http" !== $arr['scheme']) {
                 $filename = explode("@", $arr['path']);
-                $body = str_replace($img, '<img alt="" src="' . $path . '" style="border: none;" />', $body);
+                $body = str_replace($img, '<img alt="" src="' . $path . $filename . '" style="border: none;" />', $body);
             }
         }
         return $body;
@@ -293,8 +295,7 @@ class receiveMail
         if (!$this->mailbox)
             return false;
 
-        if ($isAll)
-            imap_deletemailbox($this->mailbox, $this->server);
+        $isAll && imap_deletemailbox($this->mailbox, $this->server);
         imap_delete($this->mailbox, $mid);
         imap_expunge($this->mailbox);
     }
@@ -343,14 +344,6 @@ class receiveMail
     {
         $str = imap_mime_header_decode($str);
         return $str[0]->text;
-        echo "str";
-        print_r($str);
-        if ($str[0]->charset != "default") {
-            echo "==" . $str[0]->text;
-            return iconv($str[0]->charset, 'utf8', $str[0]->text);
-        } else {
-            return $str[0]->text;
-        }
     }
 
     /**
@@ -362,7 +355,7 @@ class receiveMail
      */
     public function setPathName($fileID, $extension)
     {
-        return date('Ym\dHis', time()) . $fileID . mt_rand(0, 10000) . '.' . $extension;
+        return date('Ym\dHis') . $fileID . mt_rand(0, 10000) . '.' . $extension;
     }
 
 }

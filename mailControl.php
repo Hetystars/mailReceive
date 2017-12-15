@@ -11,19 +11,25 @@ include('receiverMail.class.php');
 
 class mailControl
 {
-    //定义系统常量
-    //用户名
-    public
-        $mailAccount = 'hetianyu@kuaidihelp.com',
-        $mailPasswd = 'TianYu1234',
-        $mailAddress = 'hetianyu@kuaidihelp.com',
-        $mailServer = 'imap.exmail.qq.com', //IMAP主机
+    /**
+     * 定义系统常量
+     * mailServer  腾讯企业邮箱 imap.exmail.qq.com port 143
+     * @var string
+     */
+    protected
+        $mailAccount = '',
+        $mailPasswd = '',
+        $mailAddress = '',
+        $mailServer = 'imap.exmail.qq.com',
         $serverType = 'pop3',
         $port = '143',
-        $now = 0,
-        $savePath = 'D:\wamp\www\CleanDeliveryAddress\slowQueryDetails',
-        $webPath = 'D:\wamp\www\CleanDeliveryAddress\slowQueryDetails';
-    
+        $now = '',
+        $savePath = '',
+        $webPath = '';
+
+    /**
+     * @var receivemail
+     */
     static private $instance;
 
     /**
@@ -36,15 +42,22 @@ class mailControl
         set_time_limit(0);
         date_default_timezone_set('Asia/Shanghai');
         error_reporting(-1);
-        $this->now = date('Y-m-d H:i:s', time());
+        $this->now = date('Y-m-d H:i:s');
         $this->setSavePath();
         self::$instance = new receivemail($this->mailAccount, $this->mailPasswd, $this->mailAddress, $this->mailServer, $this->serverType, $this->port, true);
     }
 
     /**
+     * @param $pattern
+     * @param bool $isSeen
+     * @param bool $fromHead
+     * @param bool $fromContent
+     * @param bool $isDelete
+     * @param bool $isMove
+     * @param string $moveFile
      * @return array|bool
      */
-    public function mailReceived($pattern, $fromHead = false, $fromContent = false, $isDelete = false, $isMove = true, $moveFile = 'db_address')
+    public function mailReceived($pattern, $isSeen = true, $fromHead = false, $fromContent = false, $isDelete = false, $isMove = false, $moveFile = 'db_address')
     {
         self::help($pattern);
         if (!$res = self::$instance->connect()) {
@@ -60,8 +73,8 @@ class mailControl
 
         for ($i = $tot; $i > 0; $i--) {
             $head = self::$instance->getHeaders($i);
+            if ($isSeen && $head['seen'] !== 'U') break;
             echo sprintf('正在读取邮件主题为%s的邮件', $head['subject']) . PHP_EOL;
-            $files = [];
             if ($fromHead && strpos($head[key($pattern)], current($pattern)) !== false) {
                 $body = self::$instance->getBody($i, $this->webPath);
                 $files = self::$instance->GetAttach($i, $this->savePath);
@@ -76,10 +89,10 @@ class mailControl
                 $isDelete && self::$instance->deleteMails($i, false);
                 continue;
             }
-            if(empty($pattern)){
+            if (empty($pattern)) {
                 $files = self::$instance->GetAttach($i, $this->savePath);
                 $isDelete && self::$instance->deleteMails($i, false);
-                /*$isMove && self::$instance->move_mails($i, $moveFile);*/
+                $isMove && self::$instance->move_mails($i, $moveFile);
                 $res['mail'][] = array('head' => $head, 'body' => $body, 'attachList' => $files);
             }
 
@@ -133,6 +146,7 @@ help;
      */
     public function setSavePath()
     {
+        empty($this->savePath) && $this->savePath = __DIR__;
         if (!file_exists($this->savePath)) {
             @mkdir($this->savePath, 0777, true);
             touch($this->savePath . 'index.html');
@@ -169,8 +183,7 @@ help;
 
 $obj = new mailControl();
 //收取邮件
-//var_dump(self::$instance->mailList());
-$res = $obj->mailReceived(['text' => 'db_address'], false, true,true);
+$res = $obj->mailReceived(['text' => 'db_address'], true, false, true, true);
 //print_r($res);
 
 //创建邮箱
