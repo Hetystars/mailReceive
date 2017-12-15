@@ -112,14 +112,14 @@ class mailControl
             echo <<<help
         参数pattern示例
         1.header 
-            [fromBy] => notice@kuaidihelp.com
-            [fromName] => ����ѯSQL
+            [fromBy] => notice@gmail.com
+            [fromName] => 慢查询SQL
             [ccList] => 
             [toNameOth] => ����ѯSQL
-            [subject] => RDS����ѯSQL
+            [subject] => RDS慢查询SQL
             [mailDate] => 2017-12-12 15:16:04
             [udate] => 1513062964
-            [toList] => lanshanhe@kuaidihelp.com,hetianyu@kuaidihelp.com,xiaoxiang@kuaidihelp.com
+            [toList] => 15487855555@qq.com,1258444@163.com,xx@126.com
          2.body
           [text] => db_address慢查询语句具体SQL语句,请查看excel附件!
           [img] => 
