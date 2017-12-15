@@ -44,7 +44,7 @@ class mailControl
         error_reporting(-1);
         $this->now = date('Y-m-d H:i:s');
         $this->setSavePath();
-        self::$instance = new receivemail($this->mailAccount, $this->mailPasswd, $this->mailAddress, $this->mailServer, $this->serverType, $this->port, true);
+        !self::$instance && self::$instance = new receivemail($this->mailAccount, $this->mailPasswd, $this->mailAddress, $this->mailServer, $this->serverType, $this->port, true);
     }
 
     /**
